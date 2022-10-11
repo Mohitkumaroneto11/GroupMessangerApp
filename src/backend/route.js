@@ -1,5 +1,5 @@
 "use strict"
-//const usersController = require("../../src/domain/user/service.js");
+const usersController = require("./controller/user-service");
 const { authenticateSocketConnection_ } = require("../backend/middleware/authentication");
 module.exports = function routes(route) {
     route.get('/', (request, response) => {
@@ -29,23 +29,25 @@ module.exports = function routes(route) {
         return response.json({ lobbies: configs });
     });
    
-    route.route('/api/game/join').post(async (req, response) => {
-        const configs = await usersController.joinGame(req);
-        console.log("configs response", configs);
-        return response.json({ lobbies: configs });
-    });
+    
 
     
 
-    //   route.route('/auth/login').post(authController.login);
+      route.route('/auth/login').post(async (req, response)=>{
+        const configs = await usersController.login(req.body);
+        console.log("configs response", configs);
+        return response.json({ result: configs });
+      });
+      route.route('/auth/verify').post(async (req, response)=>{
+        const configs = await usersController.verify();
+        console.log("configs response", configs);
+        return response.json({ lobbies: configs });
+      });
+      route.route('/auth/registration').post(async (req, response)=>{
+        const configs = await usersController.registration(req.body,req.header);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
 
-    //   route.route('/auth/verify').post(authController.verify);
-
-    //   route.route('/auth/register').post(authController.register);
-
-    //   route.route('/users').get(usersController.getAll).post(usersController.create);
-
-    //   route.route('/users/:id').get(usersController.getOne).put(usersController.update).delete(usersController.delete);
-
-    //   route.route('/search').post(searchController.search);
+      
 };

@@ -1,3 +1,4 @@
+require("./interface/mongo-conn");
 const httpServer = require("./interface/http-server");
 const socketServer = require("./middleware/socket-io");
 const socketIO = socketServer.initSocketServer(httpServer, "Socket");

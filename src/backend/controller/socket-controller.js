@@ -1,4 +1,5 @@
 module.exports = {
     joinUserController : require("./join-contest"),
-    removeUserController : require("./remove-socket")
+    removeUserController : require("./remove-socket"),
+    
 }
