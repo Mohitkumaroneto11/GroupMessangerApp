@@ -6,6 +6,7 @@ const {
      socketEvents
 } = require("./event");
 const {
+     createRoomController,
      joinUserController,
      removeUserController,
 

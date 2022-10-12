@@ -1,11 +1,22 @@
 const registrationValidator =  require('../model/registrationValidator')
 const mongoose = require("mongoose");
 const userSchema = require('../model/userData')
+const roomSchema = require('../model/roomData')
 const bcrypt = require("bcrypt");
-const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 // Set up Global configuration access
+var redis = require('redis');
+var JWTR =  require('jwt-redis').default;
+var redisClient = redis.createClient();
+var jwtr = new JWTR(redisClient);
+(async () => {
+    await redisClient.connect();
+})();
+
+
 dotenv.config();
+
+
 
 async function hashPassword(plaintextPassword) {
     const hash = await bcrypt.hash(plaintextPassword, 10);
@@ -17,7 +28,24 @@ async function comparePassword(plaintextPassword, hash) {
     const result = await bcrypt.compare(plaintextPassword, hash);
     return result;
 }
+exports.logout =async(req,header)=>{
+
+    let find_username = await userSchema.findOne({username:req.username}) 
+    if(find_username==null){
+        return {code:202,message : "username not exist"}
+    }
+    let token  =  header[1];
+    const usertoken = await jwtr.destroy(token);
+    if(usertoken){
+        return {code:200,message : "logout successfully",  token:usertoken}
+    }
+    else{
+        return {code:406,message : "logout unsucessfull",  token:usertoken}
+    }
+
+}
 exports.login =async(req)=>{
+    
     let find_username = await userSchema.findOne({username:req.username}) 
     console.log(find_username)
     if(!find_username){
@@ -29,10 +57,11 @@ exports.login =async(req)=>{
             let jwtSecretKey = process.env.JWT_SECRET_KEY;
             let data = {
                 time: Date(),
-                userId: find_username.username,
+                username: find_username.username,
+                role:find_username.role
             }
         
-            const usertoken = jwt.sign(data, jwtSecretKey);
+            const usertoken = await jwtr.sign(data, jwtSecretKey);
             return {code:200,message : "login successfully",  token:usertoken}
         }
         else{
@@ -41,8 +70,9 @@ exports.login =async(req)=>{
     }
 
 }
-
 exports.registration =async(req,header)=>{
+    
+
 
     let find_username = await userSchema.findOne({username:req.username})
     let find_email = await userSchema.findOne({email:req.email}) 
@@ -59,29 +89,36 @@ exports.registration =async(req,header)=>{
         let jwtSecretKey = process.env.JWT_SECRET_KEY;
     
         try {
-            const token = header(tokenHeaderKey);
-    
-            const verified = jwt.verify(token, jwtSecretKey);
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
             if(verified){
-                let hashpassword = await hashPassword(req.password)
-
-                let userDatas = {
-                    _id:new mongoose.Types.ObjectId().toString(),
-                    username:req.username,
-                    password:hashpassword,
-                    email:req.email,
-                    role:req.role
+                if(verified.role != 1)
+                {
+                    return {code:405,message : "You are not admin user"}
                 }
-                registrationValidator.registration(userDatas);
-                let save_res =new userSchema(userDatas).save();
-                return true;
+                else{
+
+                    let hashpassword = await hashPassword(req.password)
+    
+                    let userDatas = {
+                        _id:new mongoose.Types.ObjectId().toString(),
+                        username:req.username,
+                        password:hashpassword,
+                        email:req.email,
+                        role:req.role
+                    }
+                    registrationValidator.registration(userDatas);
+                    let save_res =new userSchema(userDatas).save();
+                    return true;
+                }
             }else{
                 // Access Denied
                 return {code:401,message : "Token is not verfied"};
             }
         } catch (error) {
             // Access Denied
-            return {code:401,message : error};
+            return {code:401,message : "Token is required"};
         }
 
         
@@ -90,7 +127,291 @@ exports.registration =async(req,header)=>{
         
 }
 
-exports.verify =async()=>{
+exports.updateuser =async(resqest)=>{
     
 
+
+    let findusername = resqest.query.username;
+    let req = resqest.body;
+    let header = resqest.rawHeaders;
+
+    let find_username = await userSchema.findOne({username:findusername})
+    let find_email = await userSchema.findOne({email:req.email}) 
+    if(find_username==null){
+        return {code:202,message : "username not exist"}
+    }
+    if(find_email){
+        return {code:204,message : "email already exist"}
+    }
+    else{
+        let jwtSecretKey = process.env.JWT_SECRET_KEY;
+    
+        try {
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
+            if(verified){
+                if(verified.role != 1)
+                {
+                    return {code:405,message : "You are not admin user"}
+                }
+                else{
+                    const filter = { username: findusername };
+                    const update = { email: req.email, role:req.role };
+                    let updateuser = await userSchema.findOneAndUpdate(filter, update)
+                    if(updateuser){
+                        return {code:200, message:"user information updated"};
+                    }
+                    else{
+                        return {code:407, message:"user information not updated"}
+                    }
+                }
+            }else{
+                // Access Denied
+                return {code:401,message : "Token is not verfied"};
+            }
+        } catch (error) {
+            // Access Denied
+            return {code:401,message : "Token is required"};
+        }
+
+        
+    }
+
+        
 }
+
+exports.createRoom =async(resqest)=>{
+
+    let roomName = resqest.body.roomName;
+    let header = resqest.rawHeaders;
+
+    let find_roomName = await roomSchema.findOne({roomName:roomName})
+    if(find_roomName){
+        return {code:202,message : "Room name already exist"}
+    }
+    else{
+
+        let jwtSecretKey = process.env.JWT_SECRET_KEY;
+    
+        try {
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
+            if(verified){
+                let created_by = verified.username;
+                let user=[];
+                user.push(created_by)
+                let roomDatas = {
+                    _id:new mongoose.Types.ObjectId().toString(),
+                    roomName:resqest.body.roomName,
+                    userList:user,
+                    created_by:created_by,
+                    lastupdated_by:created_by
+                }
+                
+                let updateuser = await new roomSchema(roomDatas).save();
+                return {code:200, message:"Room Created"};
+                
+            }else{
+                // Access Denied
+                return {code:401,message : "Token is not verfied"};
+            }
+        } catch (error) {
+            // Access Denied
+            return {code:401,message : "Token is not verified required"};
+        }
+
+        
+    }
+        
+}
+
+exports.addUserRoom =async(resqest)=>{
+
+    let roomName = resqest.body.roomName;
+    let userNameList = resqest.body.userNameList;
+
+    let header = resqest.rawHeaders;
+
+    let find_roomName = await roomSchema.findOne({roomName:roomName})
+    if(!find_roomName){
+        return {code:202,message : "Room name Not exist"}
+    }
+    else{
+
+        let jwtSecretKey = process.env.JWT_SECRET_KEY;
+    
+        try {
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
+            if(verified){
+                let updated_by = verified.username;
+                let users = find_roomName.userList;
+                userNameList.forEach((userN)=>{
+                    users.forEach((userL)=>{
+                        if(userL !=userN){
+                            users.push(userN)
+                        }
+                    })
+                })
+                const filter = { roomName: roomName };
+                const update = { userList: users, lastupdated_by:updated_by };
+                let updateRoom = await roomSchema.findOneAndUpdate(filter, update)
+                if(updateRoom){
+                    return {code:200, message:"Room updated"};
+                }
+                else{
+                    return {code:409, message:"Room Not updated"};
+                }
+                
+            }else{
+                // Access Denied
+                return {code:401,message : "Token is not verfied"};
+            }
+        } catch (error) {
+            // Access Denied
+            return {code:401,message : "Token is required"};
+        }
+
+        
+    }
+        
+}
+
+exports.removeUserRoom =async(resqest)=>{
+
+    let roomName = resqest.body.roomName;
+    let remove_username = resqest.body.username;
+
+    let header = resqest.rawHeaders;
+
+    let find_roomName = await roomSchema.findOne({roomName:roomName})
+    if(!find_roomName){
+        return {code:202,message : "Room name Not exist"}
+    }
+    else{
+
+        let jwtSecretKey = process.env.JWT_SECRET_KEY;
+    
+        try {
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
+            if(verified){
+                let updated_by = verified.username;
+                let users = find_roomName.userList;
+
+                for( var i = 0; i < users.length; i++){ 
+    
+                    if ( users[i] === remove_username) { 
+                
+                        users.splice(i, 1); 
+                    }
+                
+                }
+                
+                const filter = { roomName: roomName };
+                const update = { userList: users, lastupdated_by:updated_by };
+                let updateRoom = await roomSchema.findOneAndUpdate(filter, update)
+                if(updateRoom){
+                    return {code:200, message:"Room updated"};
+                }
+                else{
+                    return {code:409, message:"Room Not updated"};
+                }
+                
+            }else{
+                // Access Denied
+                return {code:401,message : "Token is not verfied"};
+            }
+        } catch (error) {
+            // Access Denied
+            return {code:401,message : "Token is required"};
+        }
+
+        
+    }
+        
+}
+
+exports.removeRoom =async(resqest)=>{
+
+    let roomName = resqest.body.roomName;
+    let header = resqest.rawHeaders;
+
+    let find_roomName = await roomSchema.findOne({roomName:roomName})
+    if(!find_roomName){
+        return {code:202,message : "Room name Not exist"}
+    }
+    else{
+
+        let jwtSecretKey = process.env.JWT_SECRET_KEY;
+    
+        try {
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
+            if(verified){
+                const filter = { roomName: roomName };
+                let updateRoom = await roomSchema.deleteOne(filter)
+                if(updateRoom){
+                    return {code:200, message:"Room Deleted successfully"};
+                }
+                else{
+                    return {code:409, message:"Room Not Deleted"};
+                }
+                
+            }else{
+                // Access Denied
+                return {code:401,message : "Token is not verfied"};
+            }
+        } catch (error) {
+            // Access Denied
+            return {code:401,message : "Token is required"};
+        }
+
+        
+    }
+        
+}
+
+exports.userList =async(resqest)=>{
+
+    let header = resqest.rawHeaders;
+    let jwtSecretKey = process.env.JWT_SECRET_KEY;
+    
+    try {
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
+            if(verified){
+                let userList = await userSchema.find()
+                
+                if(userList){
+                    let userNameList = userList.map(function(user){
+                        return user.username
+                    })
+                    return {code:200, userList:userNameList};
+                }
+                else{
+                    return {code:409, message:"User Not found"};
+                }
+                
+            }else{
+                // Access Denied
+                return {code:401,message : "Token is not verfied"};
+            }
+    } catch (error) {
+            // Access Denied
+            return {code:401,message : "Token is  not required"};
+        }
+
+        
+    
+        
+}
+
+
+

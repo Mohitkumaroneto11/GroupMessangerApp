@@ -12,42 +12,59 @@ module.exports = function routes(route) {
     route.post('/', (request, response) => {
         response.send(`Api server in running (${new Date()})`);
     });
-    route.use('/api/game/join', async (req, res, next) => {
-        let getdata = await authenticateSocketConnection_(req)
-        req.body.profile = getdata
-        next()
-      }, (req, res, next) => {
-        console.log('Request Type:', req.method)
-        next()
-      })
-
-
-      
-    route.route('/api/v1/constest/config').get(async (req, response) => {
-        const configs = await usersController.getAllLobbyConfig();
-        console.log("configs response", configs);
-        return response.json({ lobbies: configs });
-    });
-   
-    
-
-    
-
-      route.route('/auth/login').post(async (req, response)=>{
+    route.route('/auth/login').post(async (req, response)=>{
         const configs = await usersController.login(req.body);
         console.log("configs response", configs);
         return response.json({ result: configs });
       });
-      route.route('/auth/verify').post(async (req, response)=>{
-        const configs = await usersController.verify();
-        console.log("configs response", configs);
-        return response.json({ lobbies: configs });
-      });
       route.route('/auth/registration').post(async (req, response)=>{
-        const configs = await usersController.registration(req.body,req.header);
+        const configs = await usersController.registration(req.body,req.rawHeaders);
         console.log("configs response", configs);
         return response.json({ datasaved: configs });
       });
+      route.route('/auth/edituser').post(async (req, response)=>{
+        const configs = await usersController.updateuser(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+      route.route('/auth/logout').post(async (req, response)=>{
+        const configs = await usersController.logout(req.query,req.rawHeaders);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/createRoom').post(async (req, response)=>{
+        const configs = await usersController.createRoom(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/adduser').post(async (req, response)=>{
+        const configs = await usersController.addUserRoom(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/removeuser').post(async (req, response)=>{
+        const configs = await usersController.removeUserRoom(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/removeroom').post(async (req, response)=>{
+        const configs = await usersController.removeRoom(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/userList').get(async (req, response)=>{
+        const configs = await usersController.userList(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      
+
 
       
 };
