@@ -1,6 +1,6 @@
 "use strict"
 const usersController = require("./controller/user-service");
-const { authenticateSocketConnection_ } = require("../backend/middleware/authentication");
+const messageController = require("./controller/message-service")
 module.exports = function routes(route) {
     route.get('/', (request, response) => {
         response.send(`Api server in running (${new Date()})`);
@@ -59,6 +59,30 @@ module.exports = function routes(route) {
 
       route.route('/auth/userList').get(async (req, response)=>{
         const configs = await usersController.userList(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/roomList').get(async (req, response)=>{
+        const configs = await usersController.roomList(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/roombyname').get(async (req, response)=>{
+        const configs = await usersController.roomByName(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/sendMessage').post(async (req, response)=>{
+        const configs = await messageController.sendMessage(req);
+        console.log("configs response", configs);
+        return response.json({ datasaved: configs });
+      });
+
+      route.route('/auth/viewMessage').post(async (req, response)=>{
+        const configs = await messageController.viewMessage(req);
         console.log("configs response", configs);
         return response.json({ datasaved: configs });
       });

@@ -2,10 +2,12 @@ const registrationValidator =  require('../model/registrationValidator')
 const mongoose = require("mongoose");
 const userSchema = require('../model/userData')
 const roomSchema = require('../model/roomData')
+const messageSchema = require('../model/messageData')
 const bcrypt = require("bcrypt");
 const dotenv = require('dotenv');
 // Set up Global configuration access
 var redis = require('redis');
+const { request } = require('express');
 var JWTR =  require('jwt-redis').default;
 var redisClient = redis.createClient();
 var jwtr = new JWTR(redisClient);
@@ -181,10 +183,10 @@ exports.updateuser =async(resqest)=>{
         
 }
 
-exports.createRoom =async(resqest)=>{
+exports.createRoom =async(request)=>{
 
-    let roomName = resqest.body.roomName;
-    let header = resqest.rawHeaders;
+    let roomName = request.body.roomName;
+    let header = request.rawHeaders;
 
     let find_roomName = await roomSchema.findOne({roomName:roomName})
     if(find_roomName){
@@ -204,13 +206,22 @@ exports.createRoom =async(resqest)=>{
                 user.push(created_by)
                 let roomDatas = {
                     _id:new mongoose.Types.ObjectId().toString(),
-                    roomName:resqest.body.roomName,
+                    roomName:request.body.roomName,
                     userList:user,
                     created_by:created_by,
                     lastupdated_by:created_by
                 }
                 
                 let updateuser = await new roomSchema(roomDatas).save();
+                let messageData=[];
+                messageData.push({message:"Welcome to new group",send_by:verified.username, created_at:new Date})
+                
+                let messageDatas = {
+                    _id:new mongoose.Types.ObjectId().toString(),
+                    roomName:request.body.roomName,
+                    messageList:messageData
+                }
+                let updateMessage = await new messageSchema(messageDatas).save();
                 return {code:200, message:"Room Created"};
                 
             }else{
@@ -219,7 +230,7 @@ exports.createRoom =async(resqest)=>{
             }
         } catch (error) {
             // Access Denied
-            return {code:401,message : "Token is not verified required"};
+            return {code:401,message : "Token is not verified"};
         }
 
         
@@ -356,8 +367,15 @@ exports.removeRoom =async(resqest)=>{
             if(verified){
                 const filter = { roomName: roomName };
                 let updateRoom = await roomSchema.deleteOne(filter)
-                if(updateRoom){
-                    return {code:200, message:"Room Deleted successfully"};
+                let updateMessageRoom = await messageSchema.deleteOne(filter)
+                if(updateRoom.acknowledged){
+                    if(updateMessageRoom.acknowledged){
+                        return {code:200, message:"Room Deleted successfully"};
+                    }
+                    else{
+
+                        return {code:200, message:"Room Deleted successfully but no message was there"};
+                    }
                 }
                 else{
                     return {code:409, message:"Room Not Deleted"};
@@ -399,6 +417,85 @@ exports.userList =async(resqest)=>{
                     return {code:409, message:"User Not found"};
                 }
                 
+            }else{
+                // Access Denied
+                return {code:401,message : "Token is not verfied"};
+            }
+    } catch (error) {
+            // Access Denied
+            return {code:401,message : "Token is  not required"};
+        }
+
+        
+    
+        
+}
+
+exports.roomList =async(request)=>{
+
+    let header = request.rawHeaders;
+    let jwtSecretKey = process.env.JWT_SECRET_KEY;
+    
+    try {
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
+            if(verified){
+                if(request.query.roomName){
+                    let roomQuery = await roomSchema.findOne({roomName:request.query.roomName})
+                    if(roomQuery){
+                        return {code:200,message:"room Exist", data:roomQuery}
+                    }
+                    else{
+                        return {code:412,message:"room Not Exist"}
+                    }
+                }
+                else{
+                    let roomList = await roomSchema.find()
+                
+                    if(roomList){
+                        let roomNameList = roomList.map(function(room){
+                            return room.roomName
+                        })
+                        return {code:200, userList:roomNameList};
+                    }
+                    else{
+                        return {code:409, message:"User Not found"};
+                    }
+                }
+                
+                
+            }else{
+                // Access Denied
+                return {code:401,message : "Token is not verfied"};
+            }
+    } catch (error) {
+            // Access Denied
+            return {code:401,message : "Token is  not required"};
+        }
+
+        
+    
+        
+}
+
+exports.roomByName =async(request)=>{
+
+    let header = request.rawHeaders;
+    let jwtSecretKey = process.env.JWT_SECRET_KEY;
+    
+    try {
+            const token = header[1];
+            
+            const verified = await jwtr.verify(token, jwtSecretKey);
+            if(verified){
+                let roomQuery = await roomSchema.findOne({roomName:request.query.roomName})
+                if(roomQuery){
+                    return {code:200,message:"room Exist", data:roomQuery}
+                }
+                else{
+                    return {code:412,message:"room Not Exist"}                    
+                }
             }else{
                 // Access Denied
                 return {code:401,message : "Token is not verfied"};
